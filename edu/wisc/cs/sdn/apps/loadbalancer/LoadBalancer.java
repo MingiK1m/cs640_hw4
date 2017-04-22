@@ -18,9 +18,11 @@ import org.openflow.protocol.action.OFActionOutput;
 import org.openflow.protocol.action.OFActionSetField;
 import org.openflow.protocol.instruction.OFInstruction;
 import org.openflow.protocol.instruction.OFInstructionApplyActions;
+import org.openflow.protocol.instruction.OFInstructionGotoTable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import edu.wisc.cs.sdn.apps.l3routing.L3Routing;
 import edu.wisc.cs.sdn.apps.util.ArpServer;
 import edu.wisc.cs.sdn.apps.util.SwitchCommands;
 import net.floodlightcontroller.core.FloodlightContext;
@@ -141,7 +143,8 @@ public class LoadBalancer implements IFloodlightModule, IOFSwitchListener,
 		
 		{
 			OFMatch matchCriteria = new OFMatch();
-			// TODO: criteria = new connection
+			matchCriteria.setDataLayerType(OFMatch.ETH_TYPE_IPV4);
+			matchCriteria.setNetworkProtocol(OFMatch.IP_PROTO_TCP);
 			OFActionOutput actionOutput = new OFActionOutput(OFPort.OFPP_CONTROLLER);
 			OFInstruction instruction = new OFInstructionApplyActions(Arrays.asList(actionOutput));
 			SwitchCommands.installRule(sw, table, SwitchCommands.DEFAULT_PRIORITY, matchCriteria, Arrays.asList(instruction));
@@ -159,7 +162,8 @@ public class LoadBalancer implements IFloodlightModule, IOFSwitchListener,
 		/*       (3) all other packets to the next rule table in the switch  */
 		{
 			OFMatch matchCriteria = new OFMatch();
-			// TODO: TO NEXT TABLE
+			OFInstructionGotoTable instruction = new OFInstructionGotoTable(L3Routing.table);
+			SwitchCommands.installRule(sw, table, SwitchCommands.MIN_PRIORITY, matchCriteria, Arrays.asList(instruction));
 		}
 		
 		/*********************************************************************/
@@ -195,6 +199,7 @@ public class LoadBalancer implements IFloodlightModule, IOFSwitchListener,
 		switch(ethPkt.getEtherType()){
 		/* ARP reply */
 		case Ethernet.TYPE_ARP:
+		{
 			// TODO: modify this
 			ARP arp = (ARP)ethPkt.getPayload();
 			
@@ -208,14 +213,11 @@ public class LoadBalancer implements IFloodlightModule, IOFSwitchListener,
 			log.info(String.format("Received ARP request for %s from %s",
 					IPv4.fromIPv4Address(targetIP),
 					MACAddress.valueOf(arp.getSenderHardwareAddress()).toString()));
-			Iterator<? extends IDevice> deviceIterator = 
-					this.deviceProv.queryDevices(null, null, targetIP, null, null);
-			if (!deviceIterator.hasNext())
-			{ return Command.CONTINUE; }
+			
+			LoadBalancerInstance instance = instances.get(targetIP);
 			
 			// Create ARP reply
-			IDevice device = deviceIterator.next();
-			byte[] deviceMac = MACAddress.valueOf(device.getMACAddress()).toBytes();
+			byte[] deviceMac = instance.getVirtualMAC();
 			arp.setOpCode(ARP.OP_REPLY);
 			arp.setTargetHardwareAddress(arp.getSenderHardwareAddress());
 			arp.setTargetProtocolAddress(arp.getSenderProtocolAddress());
@@ -229,10 +231,11 @@ public class LoadBalancer implements IFloodlightModule, IOFSwitchListener,
 					IPv4.fromIPv4Address(targetIP),
 					MACAddress.valueOf(deviceMac).toString()));
 			SwitchCommands.sendPacket(sw, (short)pktIn.getInPort(), ethPkt);
-			
+		}	
 			break;
 		/* TCP SYNs*/
 		case Ethernet.TYPE_IPv4:
+		{
 			IPv4 ipPkt = (IPv4) ethPkt.getPayload();
 			
 			// Only TCP SYN packets will install rules
@@ -256,8 +259,7 @@ public class LoadBalancer implements IFloodlightModule, IOFSwitchListener,
 				matchCriteria.setTransportSource(tcp.getSourcePort()); // src port
 				matchCriteria.setTransportDestination(tcp.getDestinationPort()); // dst port
 				
-				// TODO : how to know mac address here?
-				OFActionSetField actionSetEthDstField = new OFActionSetField(OFOXMFieldType.ETH_DST, );
+				OFActionSetField actionSetEthDstField = new OFActionSetField(OFOXMFieldType.ETH_DST, getHostMACAddress(nextHostIp));
 				OFActionSetField actionSetIPv4DstField = new OFActionSetField(OFOXMFieldType.IPV4_DST, nextHostIp);
 				
 				ArrayList <OFAction> actions = new ArrayList<OFAction>();
@@ -279,7 +281,7 @@ public class LoadBalancer implements IFloodlightModule, IOFSwitchListener,
 				matchCriteria.setTransportDestination(tcp.getSourcePort()); // dst port
 				
 				OFActionSetField actionSetEthSrcField = new OFActionSetField(OFOXMFieldType.ETH_SRC, instance.getVirtualMAC());
-				OFActionSetField actionSetIPv4SrcField = new OFActionSetField(OFOXMFieldType.IPV4_SRC, virtualIp);
+				OFActionSetField actionSetIPv4SrcField = new OFActionSetField(OFOXMFieldType.IPV4_SRC, instance.getVirtualIP());
 
 				ArrayList <OFAction> actions = new ArrayList<OFAction>();
 				actions.add(actionSetEthSrcField);
@@ -289,7 +291,7 @@ public class LoadBalancer implements IFloodlightModule, IOFSwitchListener,
 				SwitchCommands.installRule(sw, table, SwitchCommands.MAX_PRIORITY, 
 						matchCriteria, Arrays.asList(instruction), SwitchCommands.NO_TIMEOUT, (short)20);
 			}
-			
+		}
 			break;
 		default:
 			// Do nothing here
