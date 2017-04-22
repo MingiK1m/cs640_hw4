@@ -142,12 +142,16 @@ public class LoadBalancer implements IFloodlightModule, IOFSwitchListener,
 		/*       balancer IP to the controller                               */
 		
 		{
-			OFMatch matchCriteria = new OFMatch();
-			matchCriteria.setDataLayerType(OFMatch.ETH_TYPE_IPV4);
-			matchCriteria.setNetworkProtocol(OFMatch.IP_PROTO_TCP);
-			OFActionOutput actionOutput = new OFActionOutput(OFPort.OFPP_CONTROLLER);
-			OFInstruction instruction = new OFInstructionApplyActions(Arrays.asList(actionOutput));
-			SwitchCommands.installRule(sw, table, SwitchCommands.DEFAULT_PRIORITY, matchCriteria, Arrays.asList(instruction));
+			for(int virtualIp : instances.keySet()){
+				OFMatch matchCriteria = new OFMatch();
+				matchCriteria.setDataLayerType(OFMatch.ETH_TYPE_IPV4);
+				matchCriteria.setNetworkProtocol(OFMatch.IP_PROTO_TCP);
+				matchCriteria.setNetworkDestination(virtualIp);
+				
+				OFActionOutput actionOutput = new OFActionOutput(OFPort.OFPP_CONTROLLER);
+				OFInstruction instruction = new OFInstructionApplyActions(Arrays.asList(actionOutput));
+				SwitchCommands.installRule(sw, table, SwitchCommands.DEFAULT_PRIORITY, matchCriteria, Arrays.asList(instruction));
+			}
 		}
 		
 		/*       (2) ARP packets to the controller, and                      */
