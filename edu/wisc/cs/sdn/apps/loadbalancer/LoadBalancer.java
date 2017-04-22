@@ -166,7 +166,7 @@ public class LoadBalancer implements IFloodlightModule, IOFSwitchListener,
 		/*       (3) all other packets to the next rule table in the switch  */
 		{
 			OFMatch matchCriteria = new OFMatch();
-			OFInstructionGotoTable instruction = new OFInstructionGotoTable(L3Routing.table);
+			OFInstruction instruction = new OFInstructionGotoTable(L3Routing.table);
 			SwitchCommands.installRule(sw, table, SwitchCommands.MIN_PRIORITY, matchCriteria, Arrays.asList(instruction));
 		}
 		
