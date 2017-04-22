@@ -148,7 +148,7 @@ public class LoadBalancer implements IFloodlightModule, IOFSwitchListener,
 				matchCriteria.setNetworkProtocol(OFMatch.IP_PROTO_TCP);
 				matchCriteria.setNetworkDestination(virtualIp);
 				
-				OFActionOutput actionOutput = new OFActionOutput(OFPort.OFPP_CONTROLLER);
+				OFAction actionOutput = new OFActionOutput(OFPort.OFPP_CONTROLLER);
 				OFInstruction instruction = new OFInstructionApplyActions(Arrays.asList(actionOutput));
 				SwitchCommands.installRule(sw, table, SwitchCommands.DEFAULT_PRIORITY, matchCriteria, Arrays.asList(instruction));
 			}
@@ -158,7 +158,7 @@ public class LoadBalancer implements IFloodlightModule, IOFSwitchListener,
 		{
 			OFMatch matchCriteria = new OFMatch();
 			matchCriteria.setDataLayerType(OFMatch.ETH_TYPE_ARP);
-			OFActionOutput actionOutput = new OFActionOutput(OFPort.OFPP_CONTROLLER);
+			OFAction actionOutput = new OFActionOutput(OFPort.OFPP_CONTROLLER);
 			OFInstruction instruction = new OFInstructionApplyActions(Arrays.asList(actionOutput));
 			SwitchCommands.installRule(sw, table, SwitchCommands.DEFAULT_PRIORITY, matchCriteria, Arrays.asList(instruction));
 		}
