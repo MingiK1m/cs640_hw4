@@ -250,54 +250,56 @@ public class LoadBalancer implements IFloodlightModule, IOFSwitchListener,
 			int nextHostIP = instance.getNextHostIP();
 
 			// Install connection-specific rules
+			{
+			// client to virtual IP
+			OFMatch matchCriteria = new OFMatch();
+			matchCriteria.setDataLayerType(OFMatch.ETH_TYPE_IPV4); // ipv4
+			matchCriteria.setNetworkSource(ipPkt.getSourceAddress()); // src ip
+			matchCriteria.setNetworkDestination(virtualIP); // dst ip
+			matchCriteria.setNetworkProtocol(OFMatch.IP_PROTO_TCP); // tcp
+			matchCriteria.setTransportSource(tcpPkt.getSourcePort()); // src port
+			matchCriteria.setTransportDestination(tcpPkt.getDestinationPort()); // dst port
 			
-				// client to virtual IP
-				OFMatch matchCriteria = new OFMatch();
-				matchCriteria.setDataLayerType(OFMatch.ETH_TYPE_IPV4); // ipv4
-				matchCriteria.setNetworkSource(ipPkt.getSourceAddress()); // src ip
-				matchCriteria.setNetworkDestination(virtualIP); // dst ip
-				matchCriteria.setNetworkProtocol(OFMatch.IP_PROTO_TCP); // tcp
-				matchCriteria.setTransportSource(tcpPkt.getSourcePort()); // src port
-				matchCriteria.setTransportDestination(tcpPkt.getDestinationPort()); // dst port
-				
-				ArrayList <OFAction> actions = new ArrayList<OFAction>();
-				OFActionSetField actionSetEthDstField = new OFActionSetField(OFOXMFieldType.ETH_DST, getHostMACAddress(nextHostIP));
-				OFActionSetField actionSetIPv4DstField = new OFActionSetField(OFOXMFieldType.IPV4_DST, nextHostIP);
-				actions.add(actionSetEthDstField);
-				actions.add(actionSetIPv4DstField);
+			ArrayList <OFAction> actions = new ArrayList<OFAction>();
+			OFActionSetField actionSetEthDstField = new OFActionSetField(OFOXMFieldType.ETH_DST, getHostMACAddress(nextHostIP));
+			OFActionSetField actionSetIPv4DstField = new OFActionSetField(OFOXMFieldType.IPV4_DST, nextHostIP);
+			actions.add(actionSetEthDstField);
+			actions.add(actionSetIPv4DstField);
 
-				ArrayList <OFInstruction> instructions = new ArrayList<OFInstruction>();
-				OFInstruction instructionSetFields = new OFInstructionApplyActions(actions);
-				OFInstruction instructionGoToTable = new OFInstructionGotoTable(L3Routing.table);
-				instructions.add(instructionSetFields);
-				instructions.add(instructionGoToTable);
-				
-				SwitchCommands.installRule(sw, table, (short)(SwitchCommands.DEFAULT_PRIORITY+1),
-						matchCriteria, instructions, SwitchCommands.NO_TIMEOUT, IDLE_TIMEOUT);
+			ArrayList <OFInstruction> instructions = new ArrayList<OFInstruction>();
+			OFInstruction instructionSetFields = new OFInstructionApplyActions(actions);
+			OFInstruction instructionGoToTable = new OFInstructionGotoTable(L3Routing.table);
+			instructions.add(instructionSetFields);
+			instructions.add(instructionGoToTable);
 			
-				// server to client
-				matchCriteria = new OFMatch();
-				matchCriteria.setDataLayerType(OFMatch.ETH_TYPE_IPV4); // ipv4
-				matchCriteria.setNetworkSource(nextHostIP); // src ip
-				matchCriteria.setNetworkDestination(ipPkt.getSourceAddress()); // dst ip
-				matchCriteria.setNetworkProtocol(OFMatch.IP_PROTO_TCP); // tcp
-				matchCriteria.setTransportSource(tcpPkt.getDestinationPort()); // src port
-				matchCriteria.setTransportDestination(tcpPkt.getSourcePort()); // dst port
+			SwitchCommands.installRule(sw, table, (short)(SwitchCommands.DEFAULT_PRIORITY+1),
+					matchCriteria, instructions, SwitchCommands.NO_TIMEOUT, IDLE_TIMEOUT);
+			}
+			{
+			// server to client
+			OFMatch matchCriteria = new OFMatch();
+			matchCriteria.setDataLayerType(OFMatch.ETH_TYPE_IPV4); // ipv4
+			matchCriteria.setNetworkSource(nextHostIP); // src ip
+			matchCriteria.setNetworkDestination(ipPkt.getSourceAddress()); // dst ip
+			matchCriteria.setNetworkProtocol(OFMatch.IP_PROTO_TCP); // tcp
+			matchCriteria.setTransportSource(tcpPkt.getDestinationPort()); // src port
+			matchCriteria.setTransportDestination(tcpPkt.getSourcePort()); // dst port
 
-				actions = new ArrayList<OFAction>();
-				OFActionSetField actionSetEthSrcField = new OFActionSetField(OFOXMFieldType.ETH_SRC, instance.getVirtualMAC());
-				OFActionSetField actionSetIPv4SrcField = new OFActionSetField(OFOXMFieldType.IPV4_SRC, instance.getVirtualIP());
-				actions.add(actionSetEthSrcField);
-				actions.add(actionSetIPv4SrcField);
-				
-				instructions = new ArrayList<OFInstruction>();				
-				instructionSetFields = new OFInstructionApplyActions(actions);
-				instructionGoToTable = new OFInstructionGotoTable(L3Routing.table);
-				instructions.add(instructionSetFields);
-				instructions.add(instructionGoToTable);
-				
-				SwitchCommands.installRule(sw, table, (short)(SwitchCommands.DEFAULT_PRIORITY+1), 
-						matchCriteria, instructions, SwitchCommands.NO_TIMEOUT, IDLE_TIMEOUT);
+			ArrayList <OFAction> actions = new ArrayList<OFAction>();
+			OFActionSetField actionSetEthSrcField = new OFActionSetField(OFOXMFieldType.ETH_SRC, instance.getVirtualMAC());
+			OFActionSetField actionSetIPv4SrcField = new OFActionSetField(OFOXMFieldType.IPV4_SRC, instance.getVirtualIP());
+			actions.add(actionSetEthSrcField);
+			actions.add(actionSetIPv4SrcField);
+			
+			ArrayList <OFInstruction> instructions = new ArrayList<OFInstruction>();				
+			OFInstruction instructionSetFields = new OFInstructionApplyActions(actions);
+			OFInstruction instructionGoToTable = new OFInstructionGotoTable(L3Routing.table);
+			instructions.add(instructionSetFields);
+			instructions.add(instructionGoToTable);
+			
+			SwitchCommands.installRule(sw, table, (short)(SwitchCommands.DEFAULT_PRIORITY+1), 
+					matchCriteria, instructions, SwitchCommands.NO_TIMEOUT, IDLE_TIMEOUT);
+			}
 		}
 			break;
 		default:
