@@ -5,12 +5,17 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.openflow.protocol.OFMatch;
+import org.openflow.protocol.instruction.*;
+import org.openflow.protocol.action.*;
 
 import edu.wisc.cs.sdn.apps.util.Host;
+import edu.wisc.cs.sdn.apps.util.SwitchCommands;
 
 import net.floodlightcontroller.core.IFloodlightProviderService;
 import net.floodlightcontroller.core.IOFSwitch;
@@ -54,6 +59,7 @@ public class L3Routing implements IFloodlightModule, IOFSwitchListener,
 	/**
      * Loads dependencies and initializes data structures.
      */
+	 
 	@Override
 	public void init(FloodlightModuleContext context)
 			throws FloodlightModuleException 
@@ -106,7 +112,75 @@ public class L3Routing implements IFloodlightModule, IOFSwitchListener,
      */
     private Collection<Link> getLinks()
     { return linkDiscProv.getLinks().keySet(); }
-
+	
+	private void updateTable(){
+		Link[] links=this.getLinks().toArray(new Link[0]);
+		Host[] hosts=this.getHosts().toArray(new Host[0]);
+		IOFSwitch[] switches=this.getSwitches().values().toArray(new IOFSwitch[0]);
+		int numSw=this.getSwitches().size();
+		int numHs=this.getHosts().size();
+		int numLn=this.getLinks().size();
+		//every source(target) in Bellman-Ford
+		for(int i=0;i<numHs;i++){
+			//find the source(target) switch
+			IOFSwitch source_sw=hosts[i].getSwitch();
+			if(source_sw==null){
+				continue;
+			}
+			int source_sw_id=0;
+			for(int j=0;j<numSw;j++){
+				if(source_sw.getId()==switches[j].getId()){
+					source_sw_id=j; break;
+				}
+			}
+			//run Bellman-Ford
+			int[] predecessor=new int[numSw];
+			int[] predecessorPort=new int[numSw];
+			int[] dist=new int[numSw];
+			//init the distance 
+			for(int j=0;j<numSw;j++){
+				dist[j]=100000;
+			}
+			dist[source_sw_id]=0;
+			for(int j=0;j<numSw;j++){
+				for(int k=0;k<numLn;k++){
+					//find the switches linked in this edge
+					int u=0,v=0;
+					for(int l=0;l<numSw;l++){
+						if(links[k].getDst()==switches[l].getId()){
+							u=l; break;
+						}
+					}
+					for(int l=0;l<numSw;l++){
+						if(links[k].getSrc()==switches[l].getId()){
+							v=l; break;
+						}
+					}
+					if(dist[u]+1<dist[v]){
+						dist[v]=dist[u]+1;
+						predecessor[v]=u;
+						predecessorPort[v]=links[k].getSrcPort();
+					}
+					if(dist[v]+1<dist[u]){
+						dist[u]=dist[v]+1;
+						predecessor[u]=v;
+						predecessorPort[u]=links[k].getDstPort();
+					}
+				}
+			}
+			predecessorPort[source_sw_id]=hosts[i].getPort();
+			//Update the rule in every switch on the path
+			for(int j=0;j<numSw;j++){
+				OFMatch match=new OFMatch();
+				match.setDataLayerType(OFMatch.ETH_TYPE_IPV4);
+				match.setNetworkDestination(OFMatch.ETH_TYPE_IPV4,hosts[i].getIPv4Address());
+				OFAction act=new OFActionOutput(predecessorPort[j]);
+				OFInstruction ins=new OFInstruction();
+				ins=new OFInstructionApplyActions(Arrays.asList(act));
+				SwitchCommands.installRule(switches[j],table,SwitchCommands.DEFAULT_PRIORITY,match,Arrays.asList(ins));
+			}
+		}
+	}
     /**
      * Event handler called when a host joins the network.
      * @param device information about the host
@@ -123,7 +197,10 @@ public class L3Routing implements IFloodlightModule, IOFSwitchListener,
 			
 			/*****************************************************************/
 			/* TODO: Update routing: add rules to route to new host          */
-			
+			if(host.isAttachedToSwitch()==false){
+				return;
+			}
+			updateTable();
 			/*****************************************************************/
 		}
 	}
@@ -145,7 +222,7 @@ public class L3Routing implements IFloodlightModule, IOFSwitchListener,
 		
 		/*********************************************************************/
 		/* TODO: Update routing: remove rules to route to host               */
-		
+		updateTable();
 		/*********************************************************************/
 	}
 
@@ -173,7 +250,7 @@ public class L3Routing implements IFloodlightModule, IOFSwitchListener,
 		
 		/*********************************************************************/
 		/* TODO: Update routing: change rules to route to host               */
-		
+		updateTable();
 		/*********************************************************************/
 	}
 	
@@ -189,7 +266,7 @@ public class L3Routing implements IFloodlightModule, IOFSwitchListener,
 		
 		/*********************************************************************/
 		/* TODO: Update routing: change routing rules for all hosts          */
-		
+		updateTable();
 		/*********************************************************************/
 	}
 
@@ -205,7 +282,7 @@ public class L3Routing implements IFloodlightModule, IOFSwitchListener,
 		
 		/*********************************************************************/
 		/* TODO: Update routing: change routing rules for all hosts          */
-		
+		updateTable();
 		/*********************************************************************/
 	}
 
@@ -236,7 +313,7 @@ public class L3Routing implements IFloodlightModule, IOFSwitchListener,
 		
 		/*********************************************************************/
 		/* TODO: Update routing: change routing rules for all hosts          */
-		
+		updateTable();
 		/*********************************************************************/
 	}
 
