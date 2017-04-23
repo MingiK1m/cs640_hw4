@@ -141,17 +141,15 @@ public class LoadBalancer implements IFloodlightModule, IOFSwitchListener,
 		/*       (1) packets from new connections to each virtual load       */
 		/*       balancer IP to the controller                               */
 		
-		{
-			for(int virtualIp : instances.keySet()){
-				OFMatch matchCriteria = new OFMatch();
-				matchCriteria.setDataLayerType(OFMatch.ETH_TYPE_IPV4);
-				matchCriteria.setNetworkProtocol(OFMatch.IP_PROTO_TCP);
-				matchCriteria.setNetworkDestination(virtualIp);
-				
-				OFAction actionOutput = new OFActionOutput(OFPort.OFPP_CONTROLLER);
-				OFInstruction instruction = new OFInstructionApplyActions(Arrays.asList(actionOutput));
-				SwitchCommands.installRule(sw, table, SwitchCommands.DEFAULT_PRIORITY, matchCriteria, Arrays.asList(instruction));
-			}
+		for(int virtualIp : instances.keySet()){
+			OFMatch matchCriteria = new OFMatch();
+			matchCriteria.setDataLayerType(OFMatch.ETH_TYPE_IPV4);
+			matchCriteria.setNetworkProtocol(OFMatch.IP_PROTO_TCP);
+			matchCriteria.setNetworkDestination(virtualIp);
+			
+			OFAction actionOutput = new OFActionOutput(OFPort.OFPP_CONTROLLER);
+			OFInstruction instruction = new OFInstructionApplyActions(Arrays.asList(actionOutput));
+			SwitchCommands.installRule(sw, table, SwitchCommands.DEFAULT_PRIORITY, matchCriteria, Arrays.asList(instruction));
 		}
 		
 		/*       (2) ARP packets to the controller, and                      */
@@ -204,7 +202,6 @@ public class LoadBalancer implements IFloodlightModule, IOFSwitchListener,
 		/* ARP reply */
 		case Ethernet.TYPE_ARP:
 		{
-			// TODO: modify this
 			ARP arp = (ARP)ethPkt.getPayload();
 			
 			// We only care about ARP requests for IPv4 addresses
@@ -243,10 +240,10 @@ public class LoadBalancer implements IFloodlightModule, IOFSwitchListener,
 			IPv4 ipPkt = (IPv4) ethPkt.getPayload();
 			
 			// Only TCP SYN packets will install rules
-			if(ipPkt.getFlags() != IPv4.PROTOCOL_TCP) break;
-			TCP tcp = (TCP) ipPkt.getPayload();
-			if(tcp.getFlags() != TCP_FLAG_SYN) break;
-			
+			if(ipPkt.getProtocol() != IPv4.PROTOCOL_TCP) break;
+			TCP tcpPkt = (TCP) ipPkt.getPayload();
+			if(tcpPkt.getFlags() != TCP_FLAG_SYN) break;
+					
 			// Select a host
 			int virtualIp = ipPkt.getDestinationAddress();
 			LoadBalancerInstance instance = instances.get(virtualIp);
@@ -260,8 +257,8 @@ public class LoadBalancer implements IFloodlightModule, IOFSwitchListener,
 				matchCriteria.setNetworkSource(ipPkt.getSourceAddress()); // src ip
 				matchCriteria.setNetworkDestination(ipPkt.getDestinationAddress()); // dst ip
 				matchCriteria.setNetworkProtocol(OFMatch.IP_PROTO_TCP); // tcp
-				matchCriteria.setTransportSource(tcp.getSourcePort()); // src port
-				matchCriteria.setTransportDestination(tcp.getDestinationPort()); // dst port
+				matchCriteria.setTransportSource(tcpPkt.getSourcePort()); // src port
+				matchCriteria.setTransportDestination(tcpPkt.getDestinationPort()); // dst port
 				
 				OFActionSetField actionSetEthDstField = new OFActionSetField(OFOXMFieldType.ETH_DST, getHostMACAddress(nextHostIp));
 				OFActionSetField actionSetIPv4DstField = new OFActionSetField(OFOXMFieldType.IPV4_DST, nextHostIp);
@@ -281,8 +278,8 @@ public class LoadBalancer implements IFloodlightModule, IOFSwitchListener,
 				matchCriteria.setNetworkSource(nextHostIp); // src ip
 				matchCriteria.setNetworkDestination(ipPkt.getSourceAddress()); // dst ip
 				matchCriteria.setNetworkProtocol(OFMatch.IP_PROTO_TCP); // tcp
-				matchCriteria.setTransportSource(tcp.getDestinationPort()); // src port
-				matchCriteria.setTransportDestination(tcp.getSourcePort()); // dst port
+				matchCriteria.setTransportSource(tcpPkt.getDestinationPort()); // src port
+				matchCriteria.setTransportDestination(tcpPkt.getSourcePort()); // dst port
 				
 				OFActionSetField actionSetEthSrcField = new OFActionSetField(OFOXMFieldType.ETH_SRC, instance.getVirtualMAC());
 				OFActionSetField actionSetIPv4SrcField = new OFActionSetField(OFOXMFieldType.IPV4_SRC, instance.getVirtualIP());
